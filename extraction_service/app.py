@@ -1,53 +1,69 @@
 import os
-from llama_index.multi_modal_llms import ReplicateMultiModal
-from llama_index.program import MultiModalLLMCompletionProgram
-from llama_index.output_parsers import PydanticOutputParser
-from llama_index.multi_modal_llms.replicate_multi_modal import (
-    REPLICATE_MULTI_MODAL_LLM_MODELS,
-)
-from llama_index import SimpleDirectoryReader
+import socket
+from flask import Flask, request
+from werkzeug.utils import secure_filename
+from inference_util import extract, get_multimodal_model, get_image_documents, PROMPT_TEMPLATE
 from data_model import Receipt
-from pydantic import BaseModel
-from pprint import pprint
+from datetime import datetime
+import shutil
 
 
-PROMPT_TEMPLATE = """Extract out relevant details from a receipt image and return the answer with json format:
-The business name should be on top of the receipt.
-The date of the receipt should be of the following format: `DD/MM/YYYY`.
-The total of the receipt should be beside the word `Total` and should have at least 2 decimal places.
-The category of the expense should be in any of the following list `Food, Transport, Utility Bills, Shopping, Entertainment, Investment`.
-"""
+app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = f"{os.getcwd()}/upload"
+MULTI_MODAL = get_multimodal_model()
 
-def get_multimodal_model(model_name: str = "llava-13b",
-                         max_new_tokens: int = 1000) -> ReplicateMultiModal:
-    """
-    Get a multi-modal model
-    """
 
-    return ReplicateMultiModal(
-        model=REPLICATE_MULTI_MODAL_LLM_MODELS[model_name],
-        max_new_tokens=max_new_tokens,
-    )
+@app.route("/api/health")
+def health_check():
+    return {
+        "message": "Healthy service!",
+        "hostname": socket.gethostname(),
+        "ip_addres": socket.gethostbyname(socket.gethostname())
+    }, 200
 
-def parse_result(dataclass,
-                 img_documents,
-                 prompt,
-                 llm):
-    return MultiModalLLMCompletionProgram.from_defaults(
-        output_parser=PydanticOutputParser(dataclass),
-        image_documents=img_documents,
-        prompt_template_str=prompt,
-        multi_modal_llm=llm,
-        verbose=True,
-    )()
 
-def get_image_documents(image_dir: str):
-    return SimpleDirectoryReader(image_dir).load_data()
+@app.route("/api/extract", methods=['POST'])
+def extract_receipts():
+    if "images" not in request.files:
+        return {
+            "message": "Missing images in request!"
+        }, 400
+    image_files = request.files.getlist("images")
+    extraction_results = {}
 
-if __name__ == "__main__":
-    img_data_dir = f"{os.getcwd()}/receipts_dataset"
-    test_img_documents = get_image_documents(f"{img_data_dir}")
-    multimodal_model = get_multimodal_model()
-    for idx in range(len(test_img_documents)-1):
-        result = parse_result(Receipt, test_img_documents[idx:idx+1], PROMPT_TEMPLATE, multimodal_model)
-        pprint(result)
+    current_time = datetime.now().strftime("%d-%m%Y_%H%M%S")
+    upload_dir = f"{app.config['UPLOAD_FOLDER']}/{current_time}"
+    os.mkdir(upload_dir)
+
+    try:
+        for file in image_files:
+            file_name = secure_filename(file.filename)
+            path = os.path.join(upload_dir, file_name)
+            file.save(path)
+
+        img_documents = get_image_documents(upload_dir)
+        for idx, doc in enumerate(img_documents):
+            img_extracted_result = extract(Receipt,
+                                        img_documents[idx: idx+1],
+                                        PROMPT_TEMPLATE,
+                                        MULTI_MODAL)
+            extraction_results[doc.image_path] = {}
+            for field in img_extracted_result:
+                extraction_results[doc.image_path][field[0]] = field[1]
+
+        return {
+            "message": "Data extraction successful!",
+            "data": extraction_results
+        }, 200
+
+    except Exception as ex:
+        return {
+            "message": f"Data extraction error occurred: {ex}"
+        }, 404
+
+
+if __name__ == '__main__':
+    shutil.rmtree(app.config['UPLOAD_FOLDER'], ignore_errors=True)
+    os.mkdir(app.config['UPLOAD_FOLDER'])
+
+    app.run(port="5000", debug=True)
