@@ -3,4 +3,4 @@
 **.DS_Store**
 **__pycache__**
 **.pem**
-**service_account.json**
+**sa.json**

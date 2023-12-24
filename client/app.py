@@ -2,7 +2,7 @@ import os
 import streamlit as st
 import requests
 from datetime import datetime
-from util.gdrive_util import get_gdrive_service, create_folder, upload_file, list_folder
+from util.gdrive_util import get_gdrive_service, create_folder, upload_file, list_folder, delete_files
 
 st.set_page_config(page_title="Expense Tool",
                    page_icon="💸",
@@ -17,7 +17,7 @@ EXTRACTION_ENDPOINT = "http://localhost:5000/api/extract"
 DATA_ENDPOINT = "http://localhost:8080/api/expenses"
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
-CREDENTIALS_FILE = f"{os.getcwd()}/client/sevice_account.json"
+CREDENTIALS_FILE = f"{os.getcwd()}/client/sa.json"
 DRIVE_SERVICE = get_gdrive_service(scopes=SCOPES, credentials_file=CREDENTIALS_FILE)
 
 col1, col2 = st.columns(2)
@@ -90,10 +90,12 @@ with col2:
                                                  json={"business_name": st.session_state["businessname"],
                                                        "category": st.session_state["category"],
                                                        "date": st.session_state["date"],
-                                                       "total": st.session_state["total"],
+                                                       "total": float(st.session_state["total"]),
                                                        "gdrive_id": file_id
                                                       })
 
                         st.toast(f"Successful submission!", icon="✅")
                     except Exception as e:
+                        print(f"Error: {str(e)}")
+                        delete_files(drive_service=DRIVE_SERVICE, file_or_folder_ids=[file_id])
                         st.toast(f"Error in uploading receipt. Please try again!", icon="❌")

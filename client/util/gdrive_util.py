@@ -121,9 +121,6 @@ def get_gdrive_service(scopes: List,
     Get Google Drive service from credentials file and based on scopes
     """
 
-    if os.path.exists(credentials_file):
-        raise FileNotFoundError(f"Credentials file not found: {credentials_file}")
-
     credentials = service_account.Credentials.from_service_account_file(credentials_file, scopes=scopes)
     return build("drive", "v3", credentials=credentials)
 
