@@ -62,6 +62,8 @@ with col2:
                 category = st.text_input(label="Category", value=st.session_state["category"])
                 date = st.text_input(label="Date", value=st.session_state["date"])
                 total = st.text_input(label="Total", value=st.session_state["total"])
+                spreadsheetid = st.text_input(label="Spreadsheet ID", value="17QHfvGUtklF39JDfhoUA-FgZzwSC86gD-aNO36Ize1Y")
+                sheetid = st.text_input(label="Sheet ID", value="0")
 
                 form_submit = st.form_submit_button(label="Submit")
                 if form_submit:
@@ -69,6 +71,8 @@ with col2:
                     st.session_state["category"] = category
                     st.session_state["date"] = date
                     st.session_state["total"] = total
+                    st.session_state["spreadsheetid"] = spreadsheetid
+                    st.session_state["sheetid"] = sheetid
 
                     try:
                         existing_folders = list_folder(drive_service=DRIVE_SERVICE)
@@ -91,7 +95,9 @@ with col2:
                                                        "category": st.session_state["category"],
                                                        "date": st.session_state["date"],
                                                        "total": float(st.session_state["total"]),
-                                                       "gdrive_id": file_id
+                                                       "gdrive_id": file_id,
+                                                       "spreadsheet_id": st.session_state["spreadsheetid"],
+                                                       "sheet_id": int(st.session_state["sheetid"])
                                                       })
 
                         st.toast(f"Successful submission!", icon="✅")
